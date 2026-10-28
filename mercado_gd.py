@@ -10,6 +10,8 @@ Uso: python3 mercado_gd.py [--forcar] [--zip arquivo.zip] [--saida pasta]
 import argparse, csv, datetime, hashlib, io, json, os, urllib.request, zipfile
 from collections import defaultdict
 
+import aneel  # tentativas de novo quando o portal da ANEEL não responde
+
 AQUI = os.path.dirname(os.path.abspath(__file__))
 CFG = json.load(open(os.path.join(AQUI, 'config.json'), encoding='utf-8'))
 CKAN = 'https://dadosabertos.aneel.gov.br/api/3/action/package_show?id=relacao-de-empreendimentos-de-geracao-distribuida'
@@ -22,10 +24,12 @@ def log(*a):
 
 
 def recurso_zip():
-    with urllib.request.urlopen(CKAN, timeout=60) as r:
-        for x in json.load(r)['result']['resources']:
-            if x['url'].lower().endswith('empreendimento-geracao-distribuida.zip'):
-                return x['url'], x.get('last_modified') or x.get('metadata_modified') or ''
+    def ler():
+        with urllib.request.urlopen(CKAN, timeout=60) as r:
+            return json.load(r)['result']['resources']
+    for x in aneel.com_tentativas(ler, 'lista de arquivos da relação de GD'):
+        if x['url'].lower().endswith('empreendimento-geracao-distribuida.zip'):
+            return x['url'], x.get('last_modified') or x.get('metadata_modified') or ''
     raise SystemExit('relação de GD não encontrada no CKAN da ANEEL')
 
 
@@ -57,12 +61,15 @@ def main():
         os.makedirs(os.path.join(AQUI, 'cache'), exist_ok=True)
         arq = os.path.join(AQUI, 'cache', 'gd.zip')
         log('baixando a relação de GD da ANEEL')
-        with urllib.request.urlopen(url, timeout=1800) as r, open(arq, 'wb') as f:
-            while True:
-                b = r.read(1 << 20)
-                if not b:
-                    break
-                f.write(b)
+
+        def ler():
+            with urllib.request.urlopen(url, timeout=1800) as r, open(arq, 'wb') as f:
+                while True:
+                    b = r.read(1 << 20)
+                    if not b:
+                        break
+                    f.write(b)
+        aneel.com_tentativas(ler, 'relação de GD (zip)')
     hoje = datetime.date.today()
     corte12 = (hoje - datetime.timedelta(days=365)).isoformat()
     mun = {}
@@ -115,4 +122,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    sys.exit(aneel.executar(main, 'mercado'))

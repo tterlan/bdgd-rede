@@ -15,6 +15,8 @@ import io
 
 import pandas as pd
 
+import aneel  # tentativas de novo quando o portal da ANEEL não responde
+
 AQUI = os.path.dirname(os.path.abspath(__file__))
 CFG = json.load(open(os.path.join(AQUI, 'config.json'), encoding='utf-8'))
 ANO_INICIAL = 2023  # faturas mais antigas que isso não interessam à conferência
@@ -27,20 +29,25 @@ def log(*a):
 
 
 def recursos(pacote):
-    with urllib.request.urlopen(CKAN + urllib.parse.quote(pacote), timeout=60) as r:
-        return {x['name']: x['url'] for x in json.load(r)['result']['resources']}
+    def ler():
+        with urllib.request.urlopen(CKAN + urllib.parse.quote(pacote), timeout=60) as r:
+            return {x['name']: x['url'] for x in json.load(r)['result']['resources']}
+    return aneel.com_tentativas(ler, 'lista de arquivos ' + pacote)
 
 
 def baixa(url, cache):
     nome = os.path.join(cache, os.path.basename(urllib.parse.urlparse(url).path))
     if not os.path.exists(nome):
         log('baixando', os.path.basename(nome))
-        with urllib.request.urlopen(url, timeout=900) as r, open(nome + '.tmp', 'wb') as f:
-            while True:
-                b = r.read(1 << 20)
-                if not b:
-                    break
-                f.write(b)
+
+        def ler():
+            with urllib.request.urlopen(url, timeout=900) as r, open(nome + '.tmp', 'wb') as f:
+                while True:
+                    b = r.read(1 << 20)
+                    if not b:
+                        break
+                    f.write(b)
+        aneel.com_tentativas(ler, os.path.basename(nome))
         os.replace(nome + '.tmp', nome)
     return nome
 
@@ -112,7 +119,7 @@ def main():
     # bandeiras: acionamento mensal (cor e adicional em R$/MWh)
     rb = recursos('bandeiras-tarifarias')
     url = next(u for n, u in rb.items() if 'Acionamento' in n and u.lower().endswith('.csv'))
-    bruto = urllib.request.urlopen(url, timeout=120).read()
+    bruto = aneel.com_tentativas(lambda: urllib.request.urlopen(url, timeout=120).read(), 'bandeiras')
     try:
         texto = bruto.decode('utf-8')
     except UnicodeDecodeError:
@@ -145,4 +152,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(aneel.executar(main, 'tarifas'))

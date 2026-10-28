@@ -46,6 +46,12 @@ Arquivos e campos novos entram sem mudar a versão: o cadastro ignora o que não
 - **Publicação:** só quando algo muda, na release `tarifas` (`tarifas.json`, cerca de 500 kB). O cadastro baixa esse arquivo uma vez por dia.
 - **Conteúdo de cada tarifa:** resolução, vigência, subgrupo, modalidade, classe, subclasse, detalhe (ex.: SCEE), posto e unidade, com TUSD, TE e Fio B em R$/MWh ou R$/kW, sem tributos.
 - **Conteúdo das bandeiras:** mês, cor e adicional em R$/MWh.
+- **ANEEL fora do ar** (`aneel.py`, vale também para o mercado):
+  - se o portal de dados abertos não responder, tenta de novo depois de 1, 3 e 6 minutos;
+  - se continuar fora, a rodada termina com **aviso**, não com erro, e nada é publicado: o cadastro segue com os dados anteriores;
+  - os dias fora ficam contados em `aneel_falhas.json`;
+  - a partir de **3 dias seguidos** fora, a rodada termina com **erro**, e o GitHub manda o e-mail;
+  - quando o portal volta, a contagem é zerada.
 
 ## Mercado
 - **`mercado_gd.py`** roda junto com as tarifas, todo dia, mas só trabalha quando a ANEEL publica uma relação de GD nova (mensal).

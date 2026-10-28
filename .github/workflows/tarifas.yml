@@ -24,9 +24,9 @@ concurrency:
 jobs:
   tarifas:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Python
         run: pip install -q pandas pyarrow
@@ -75,6 +75,19 @@ jobs:
           git add mercado_hash.txt
           git commit -m "Mercado: $(cut -c1-16 mercado_hash.txt)" || true
           git pull --rebase origin main && git push
+
+      # Portal da ANEEL fora do ar: os scripts tentam de novo (1, 3 e 6 min) e, se continuar fora, terminam com aviso e
+      # contam o dia em aneel_falhas.json (erro só a partir de 3 dias seguidos). Aqui a contagem é guardada no repositório.
+      - name: Registrar dias com a ANEEL fora do ar
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain -- aneel_falhas.json)" ]; then
+            git config user.name "bdgd-bot"
+            git config user.email "bdgd-bot@users.noreply.github.com"
+            git add -A -- aneel_falhas.json
+            git commit -m "ANEEL: dias fora do ar" || true
+            git pull --rebase origin main && git push
+          fi
 
       - name: Manter o agendamento ativo
         if: always()
