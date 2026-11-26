@@ -150,6 +150,7 @@ def liga_gdmt(gdmt, trafos):
 
 URL_GD = ('https://dadosabertos.aneel.gov.br/dataset/5e0fafd2-21b9-4d5b-b622-40438d40aba2/resource/'
           'b1bd71e7-d0ad-4214-9053-cbd58e9564a7/download/empreendimento-geracao-distribuida.zip')
+URL_GD_COPIA = 'https://github.com/tterlan/bdgd-rede/releases/download/mercado/gd-relacao.zip'
 _GD_LISTA = {}
 
 
@@ -162,9 +163,17 @@ def lista_gd(ufs, arquivo=None):
             arquivo = _GD_LISTA.get('_arquivo')
         if not arquivo:  # baixa uma vez por execução e reaproveita para as outras distribuidoras
             arquivo = os.path.join(tempfile.mkdtemp(), 'gd.zip')
-            log('baixando a relação de GD da ANEEL')
-            with urllib.request.urlopen(URL_GD, timeout=1800) as r, open(arquivo, 'wb') as f:
-                shutil.copyfileobj(r, f, 1 << 20)
+            # a ANEEL às vezes bloqueia o GitHub; o PC do Terlan publica uma cópia na release "mercado"
+            for nome, url, tempo in (('ANEEL', URL_GD, 180), ('cópia na release mercado', URL_GD_COPIA, 600)):
+                log('baixando a relação de GD:', nome)
+                try:
+                    with urllib.request.urlopen(url, timeout=tempo) as r, open(arquivo, 'wb') as f:
+                        shutil.copyfileobj(r, f, 1 << 20)
+                    break
+                except Exception as e:
+                    log('relação de GD -', nome, 'falhou:', e)
+            else:
+                raise RuntimeError('relação de GD indisponível (ANEEL e cópia)')
             _GD_LISTA['_arquivo'] = arquivo
         for u in falta:
             _GD_LISTA[u] = {}
