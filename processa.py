@@ -299,6 +299,25 @@ def processa(dist, d, gdb, item, saida, gd_arquivo=None):
             continue
         c = f['geometry']['coordinates']
         subs[f['properties']['COD_ID']] = {'cod': f['properties']['COD_ID'], 'nome': f['properties']['NOME'], 'lat': round(c[1], 6), 'lon': round(c[0], 6)}
+    # potência dos transformadores de força de cada subestação (UNTRS); opcional: se a camada ou o campo faltar, segue sem
+    for campos in (['SUB', 'POT_NOM', 'SIT_ATIV'], ['SUB', 'POT_NOM']):
+        try:
+            linhas = csv_de(gdb, 'UNTRS', None, campos, pasta=tmp)
+        except Exception as e:
+            log('UNTRS com', campos, 'indisponível:', getattr(e, 'stderr', e))
+            continue
+        for r in linhas:
+            s = subs.get(r['SUB'])
+            if s is None or r.get('SIT_ATIV', 'AT') not in ('AT', ''):
+                continue
+            p = num(r['POT_NOM'])
+            if p > 1000:        # veio em kVA; guarda em MVA
+                p /= 1000
+            if p > 0:
+                s['mva'] = round(s.get('mva', 0) + p, 2)
+                s['ntr'] = s.get('ntr', 0) + 1
+        log('subestações com potência:', sum(1 for s in subs.values() if 'mva' in s))
+        break
     log('rede de MT de', len(cts_sel), 'alimentadores')
     cond = {r['COD_ID']: r['R_REGUL'] for r in csv_de(gdb, 'SEGCON', None, ['COD_ID', 'R_REGUL'], pasta=tmp)}
     out_mt = os.path.join(tmp, 'mt.geojson')
