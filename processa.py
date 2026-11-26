@@ -309,11 +309,18 @@ def processa(dist, d, gdb, item, saida, gd_arquivo=None):
         c = f['geometry']['coordinates']
         subs[f['properties']['COD_ID']] = {'cod': f['properties']['COD_ID'], 'nome': f['properties']['NOME'], 'lat': round(c[1], 6), 'lon': round(c[0], 6)}
     # potência dos transformadores de força de cada subestação (UNTRS); opcional: se a camada ou o campo faltar, segue sem
-    for campos in (['SUB', 'POT_NOM', 'SIT_ATIV'], ['SUB', 'POT_NOM']):
+    try:
+        camadas = subprocess.run(['ogrinfo', '-q', '-so', gdb], check=True, capture_output=True, text=True).stdout
+    except Exception:
+        camadas = ''
+    nomes_untr = [m for m in re.findall(r'\d+: (\S+)', camadas) if m.upper().startswith('UNTR') and 'MT' not in m.upper()]
+    log('camadas de transformador de subestação:', nomes_untr or 'nenhuma', '| UNTR*:', re.findall(r'\d+: (UNTR\S*)', camadas))
+    tentativas = [(c, f) for c in (nomes_untr or ['UNTRAT', 'UNTRS']) for f in (['SUB', 'POT_NOM', 'SIT_ATIV'], ['SUB', 'POT_NOM'])]
+    for camada_untr, campos in tentativas:
         try:
-            linhas = csv_de(gdb, 'UNTRS', None, campos, pasta=tmp)
+            linhas = csv_de(gdb, camada_untr, None, campos, pasta=tmp)
         except Exception as e:
-            log('UNTRS com', campos, 'indisponível:', getattr(e, 'stderr', e))
+            log(camada_untr, 'com', campos, 'indisponível:', getattr(e, 'stderr', e))
             continue
         for r in linhas:
             s = subs.get(r['SUB'])
